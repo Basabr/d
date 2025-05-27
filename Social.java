@@ -232,8 +232,34 @@ public class Social {
   }
 
   // کلاس داخلی برای نمایش پست
-  private static class Post {
+    private static class Post {
     private final String id;
     private final String authorCode;
     private final String text;
-   
+    private final long timestamp;
+
+    public Post(String id, String authorCode, String text, long timestamp) {
+      this.id = id;
+      this.authorCode = authorCode;
+      this.text = text;
+      this.timestamp = timestamp;
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    public String getAuthorCode() {
+      return authorCode;
+    }
+
+    public String getText() {
+      return text;
+    }
+
+    public long getTimestamp() {
+      return timestamp;
+    }
+  }
+}
+
