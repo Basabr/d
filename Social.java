@@ -5,13 +5,16 @@ import java.util.*;
 public class Social {
 
   private final PersonRepository personRepository = new PersonRepository();
-  
-  // Map برای نگهداری دوستان هر شخص (کلید: کد شخص، مقدار: مجموعه کد دوستان)
+
+  // نگهداری دوستان هر شخص (کلید: کد شخص، مقدار: مجموعه کد دوستان)
   private final Map<String, Set<String>> friendships = new HashMap<>();
 
+  // نگهداری گروه‌ها و اعضای هر گروه (کلید: نام گروه، مقدار: مجموعه کدهای اعضا)
+  private final Map<String, Set<String>> groups = new HashMap<>();
+
   public void addPerson(String code, String name, String surname) throws PersonExistsException {
-    if (personRepository.findById(code).isPresent()){
-        throw new PersonExistsException();
+    if (personRepository.findById(code).isPresent()) {
+      throw new PersonExistsException();
     }
     Person person = new Person(code, name, surname);
     personRepository.save(person);
@@ -24,7 +27,6 @@ public class Social {
   }
 
   public void addFriendship(String codePerson1, String codePerson2) throws NoSuchCodeException {
-    // بررسی وجود هر دو شخص در مخزن داده‌ها
     if (!personRepository.findById(codePerson1).isPresent()) {
       throw new NoSuchCodeException("Person code not found: " + codePerson1);
     }
@@ -32,49 +34,73 @@ public class Social {
       throw new NoSuchCodeException("Person code not found: " + codePerson2);
     }
 
-    // جلوگیری از اضافه کردن دوستی به خود شخص
     if (codePerson1.equals(codePerson2)) {
       return;  // یا می‌توانید Exception اختصاصی پرتاب کنید
     }
 
-    // اضافه کردن دوطرفه
     friendships.computeIfAbsent(codePerson1, k -> new HashSet<>()).add(codePerson2);
     friendships.computeIfAbsent(codePerson2, k -> new HashSet<>()).add(codePerson1);
   }
 
   public Collection<String> listOfFriends(String codePerson) throws NoSuchCodeException {
-    // بررسی وجود شخص
     if (!personRepository.findById(codePerson).isPresent()) {
       throw new NoSuchCodeException("Person code not found: " + codePerson);
     }
-    // بازگرداندن لیست دوستان یا مجموعه خالی اگر دوستانی نداشته باشد
     return friendships.getOrDefault(codePerson, Collections.emptySet());
   }
 
-  // سایر متدها بدون تغییر
+  // ---- بخش مدیریت گروه‌ها ----
+
   public void addGroup(String groupName) throws GroupExistsException {
-    // TO BE IMPLEMENTED
+    if (groupName == null || groupName.trim().isEmpty() || groupName.contains(" ")) {
+      throw new IllegalArgumentException("Group name must be a single word");
+    }
+    if (groups.containsKey(groupName)) {
+      throw new GroupExistsException("Group already exists: " + groupName);
+    }
+    groups.put(groupName, new HashSet<>());
   }
 
   public void deleteGroup(String groupName) throws NoSuchCodeException {
-    // TO BE IMPLEMENTED
+    if (!groups.containsKey(groupName)) {
+      throw new NoSuchCodeException("Group not found: " + groupName);
+    }
+    groups.remove(groupName);
   }
 
   public void updateGroupName(String groupName, String newName) throws NoSuchCodeException, GroupExistsException {
-    // TO BE IMPLEMENTED
+    if (!groups.containsKey(groupName)) {
+      throw new NoSuchCodeException("Group not found: " + groupName);
+    }
+    if (newName == null || newName.trim().isEmpty() || newName.contains(" ")) {
+      throw new IllegalArgumentException("Group name must be a single word");
+    }
+    if (groups.containsKey(newName)) {
+      throw new GroupExistsException("New group name already exists: " + newName);
+    }
+    Set<String> members = groups.remove(groupName);
+    groups.put(newName, members);
   }
 
   public Collection<String> listOfGroups() {
-    return null; // TO BE IMPLEMENTED
+    return new ArrayList<>(groups.keySet());
   }
 
   public void addPersonToGroup(String codePerson, String groupName) throws NoSuchCodeException {
-    // TO BE IMPLEMENTED
+    if (!personRepository.findById(codePerson).isPresent()) {
+      throw new NoSuchCodeException("Person code not found: " + codePerson);
+    }
+    if (!groups.containsKey(groupName)) {
+      throw new NoSuchCodeException("Group not found: " + groupName);
+    }
+    groups.get(groupName).add(codePerson);
   }
 
   public Collection<String> listOfPeopleInGroup(String groupName) {
-    return null; // TO BE IMPLEMENTED
+    return groups.getOrDefault(groupName, null);
   }
+
+  // --- سایر متدها ---
 
   public String personWithLargestNumberOfFriends() {
     return null; // TO BE IMPLEMENTED
@@ -107,5 +133,4 @@ public class Social {
   public List<String> getPaginatedFriendPosts(String author, int pageNo, int pageLength) {
     return null; // TO BE IMPLEMENTED
   }
-
 }
