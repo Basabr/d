@@ -6,6 +6,9 @@ public class Social {
 
   private final PersonRepository personRepository = new PersonRepository();
   
+  // Map برای نگهداری دوستان هر شخص (کلید: کد شخص، مقدار: مجموعه کد دوستان)
+  private final Map<String, Set<String>> friendships = new HashMap<>();
+
   public void addPerson(String code, String name, String surname) throws PersonExistsException {
     if (personRepository.findById(code).isPresent()){
         throw new PersonExistsException();
@@ -21,13 +24,34 @@ public class Social {
   }
 
   public void addFriendship(String codePerson1, String codePerson2) throws NoSuchCodeException {
-    // TO BE IMPLEMENTED
+    // بررسی وجود هر دو شخص در مخزن داده‌ها
+    if (!personRepository.findById(codePerson1).isPresent()) {
+      throw new NoSuchCodeException("Person code not found: " + codePerson1);
+    }
+    if (!personRepository.findById(codePerson2).isPresent()) {
+      throw new NoSuchCodeException("Person code not found: " + codePerson2);
+    }
+
+    // جلوگیری از اضافه کردن دوستی به خود شخص
+    if (codePerson1.equals(codePerson2)) {
+      return;  // یا می‌توانید Exception اختصاصی پرتاب کنید
+    }
+
+    // اضافه کردن دوطرفه
+    friendships.computeIfAbsent(codePerson1, k -> new HashSet<>()).add(codePerson2);
+    friendships.computeIfAbsent(codePerson2, k -> new HashSet<>()).add(codePerson1);
   }
 
   public Collection<String> listOfFriends(String codePerson) throws NoSuchCodeException {
-    return null; // TO BE IMPLEMENTED
+    // بررسی وجود شخص
+    if (!personRepository.findById(codePerson).isPresent()) {
+      throw new NoSuchCodeException("Person code not found: " + codePerson);
+    }
+    // بازگرداندن لیست دوستان یا مجموعه خالی اگر دوستانی نداشته باشد
+    return friendships.getOrDefault(codePerson, Collections.emptySet());
   }
 
+  // سایر متدها بدون تغییر
   public void addGroup(String groupName) throws GroupExistsException {
     // TO BE IMPLEMENTED
   }
