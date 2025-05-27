@@ -6,11 +6,19 @@ public class Social {
 
   private final PersonRepository personRepository = new PersonRepository();
 
-  // نگهداری دوستان هر شخص (کلید: کد شخص، مقدار: مجموعه کد دوستان)
+  // دوستان هر شخص (کد شخص -> مجموعه کد دوستان)
   private final Map<String, Set<String>> friendships = new HashMap<>();
 
-  // نگهداری گروه‌ها و اعضای هر گروه (کلید: نام گروه، مقدار: مجموعه کدهای اعضا)
+  // گروه‌ها و اعضای آنها (نام گروه -> مجموعه کد اعضا)
   private final Map<String, Set<String>> groups = new HashMap<>();
+
+  // پست‌ها: شناسه پست -> Post object
+  private final Map<String, Post> posts = new HashMap<>();
+
+  // پست‌های هر کاربر (کد کاربر -> لیست شناسه پست‌ها مرتب شده بر اساس زمان نزولی)
+  private final Map<String, List<String>> userPosts = new HashMap<>();
+
+  // --- Person, Friendship, Group methods ---
 
   public void addPerson(String code, String name, String surname) throws PersonExistsException {
     if (personRepository.findById(code).isPresent()) {
@@ -35,7 +43,7 @@ public class Social {
     }
 
     if (codePerson1.equals(codePerson2)) {
-      return;  // یا می‌توانید Exception اختصاصی پرتاب کنید
+      return;
     }
 
     friendships.computeIfAbsent(codePerson1, k -> new HashSet<>()).add(codePerson2);
@@ -49,7 +57,7 @@ public class Social {
     return friendships.getOrDefault(codePerson, Collections.emptySet());
   }
 
-  // ---- بخش مدیریت گروه‌ها ----
+  // ---- گروه‌ها ----
 
   public void addGroup(String groupName) throws GroupExistsException {
     if (groupName == null || groupName.trim().isEmpty() || groupName.contains(" ")) {
@@ -100,37 +108,132 @@ public class Social {
     return groups.getOrDefault(groupName, null);
   }
 
-  // --- سایر متدها ---
+  // --- R4: Statistics ---
 
   public String personWithLargestNumberOfFriends() {
-    return null; // TO BE IMPLEMENTED
+    String result = null;
+    int maxFriends = -1;
+    for (String code : personRepository.findAllCodes()) {
+      int friendsCount = friendships.getOrDefault(code, Collections.emptySet()).size();
+      if (friendsCount > maxFriends) {
+        maxFriends = friendsCount;
+        result = code;
+      }
+    }
+    return result;
   }
 
   public String largestGroup() {
-    return null; // TO BE IMPLEMENTED
+    String result = null;
+    int maxMembers = -1;
+    for (Map.Entry<String, Set<String>> entry : groups.entrySet()) {
+      int size = entry.getValue().size();
+      if (size > maxMembers) {
+        maxMembers = size;
+        result = entry.getKey();
+      }
+    }
+    return result;
   }
 
   public String personInLargestNumberOfGroups() {
-    return null; // TO BE IMPLEMENTED
+    // شمارش تعداد گروه‌هایی که هر فرد در آن عضو است
+    Map<String, Integer> countGroups = new HashMap<>();
+    for (Set<String> members : groups.values()) {
+      for (String member : members) {
+        countGroups.put(member, countGroups.getOrDefault(member, 0) + 1);
+      }
+    }
+    String result = null;
+    int maxCount = -1;
+    for (Map.Entry<String, Integer> entry : countGroups.entrySet()) {
+      if (entry.getValue() > maxCount) {
+        maxCount = entry.getValue();
+        result = entry.getKey();
+      }
+    }
+    return result;
   }
 
+  // --- R5: Posts ---
+
   public String post(String authorCode, String text) {
-    return null; // TO BE IMPLEMENTED
+    if (!personRepository.findById(authorCode).isPresent()) {
+      throw new IllegalArgumentException("Author does not exist: " + authorCode);
+    }
+    // تولید شناسه یکتا (ترکیب حروف و اعداد) می‌توان UUID را به کار برد
+    String postId = UUID.randomUUID().toString().replace("-", "");
+    long timestamp = System.currentTimeMillis();
+    Post post = new Post(postId, authorCode, text, timestamp);
+    posts.put(postId, post);
+
+    // افزودن پست به لیست پست‌های کاربر به ترتیب نزولی زمان
+    userPosts.computeIfAbsent(authorCode, k -> new ArrayList<>()).add(0, postId);
+
+    return postId;
   }
 
   public String getPostContent(String pid) {
-    return null; // TO BE IMPLEMENTED
+    Post p = posts.get(pid);
+    return (p != null) ? p.getText() : null;
   }
 
   public long getTimestamp(String pid) {
-    return -1; // TO BE IMPLEMENTED
+    Post p = posts.get(pid);
+    return (p != null) ? p.getTimestamp() : -1;
   }
 
   public List<String> getPaginatedUserPosts(String author, int pageNo, int pageLength) {
-    return null; // TO BE IMPLEMENTED
+    List<String> allPosts = userPosts.getOrDefault(author, Collections.emptyList());
+    return paginateList(allPosts, pageNo, pageLength);
   }
 
   public List<String> getPaginatedFriendPosts(String author, int pageNo, int pageLength) {
-    return null; // TO BE IMPLEMENTED
+    Set<String> friends = friendships.getOrDefault(author, Collections.emptySet());
+    List<Post> friendPosts = new ArrayList<>();
+    for (String friendCode : friends) {
+      List<String> fPosts = userPosts.getOrDefault(friendCode, Collections.emptyList());
+      for (String pid : fPosts) {
+        Post p = posts.get(pid);
+        if (p != null) {
+          friendPosts.add(p);
+        }
+      }
+    }
+    // مرتب‌سازی پست‌ها بر اساس زمان نزولی
+    friendPosts.sort((p1, p2) -> Long.compare(p2.getTimestamp(), p1.getTimestamp()));
+
+    // استخراج شناسه پست‌ها به همراه نام نویسنده به صورت "authorName:postId"
+    List<String> result = new ArrayList<>();
+    for (Post p : friendPosts) {
+      try {
+        Person author = personRepository.findById(p.getAuthorCode()).orElse(null);
+        if (author != null) {
+          result.add(author.getName() + ":" + p.getId());
+        }
+      } catch (Exception e) {
+        // نادیده گرفتن خطاها
+      }
+    }
+    return paginateList(result, pageNo, pageLength);
   }
-}
+
+  // --- متد کمکی برای صفحه‌بندی ---
+  private <T> List<T> paginateList(List<T> list, int pageNo, int pageLength) {
+    if (pageNo <= 0 || pageLength <= 0) {
+      return Collections.emptyList();
+    }
+    int fromIndex = (pageNo - 1) * pageLength;
+    if (fromIndex >= list.size()) {
+      return Collections.emptyList();
+    }
+    int toIndex = Math.min(fromIndex + pageLength, list.size());
+    return list.subList(fromIndex, toIndex);
+  }
+
+  // کلاس داخلی برای نمایش پست
+  private static class Post {
+    private final String id;
+    private final String authorCode;
+    private final String text;
+   
